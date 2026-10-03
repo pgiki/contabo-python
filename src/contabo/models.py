@@ -73,15 +73,57 @@ class PtrRecord(ContaboModel):
 
 
 class DomainCheck(ContaboModel):
-    """Result of `POST /v1/registries-domains/{domain}/check-availability`."""
+    """Availability result (`POST /v1/registries-domains/{domain}/check-availability`)."""
 
     domain: str = ""
     available: bool = False
+    reason: str | None = None
+
+
+class DomainDetails(ContaboModel):
+    """SLD/TLD breakdown of a domain name."""
+
+    sld: str = Field(alias="sld", default="")
+    tld: str = Field(alias="tld", default="")
+    domain_puny: str = Field(alias="domainPuny", default="")
+
+    @property
+    def fqdn(self) -> str:
+        if self.sld and self.tld:
+            return f"{self.sld}.{self.tld}"
+        return self.domain_puny
+
+
+class DomainHandles(ContaboModel):
+    """Contact-handle IDs attached to a domain (owner/admin/tech/zone)."""
+
+    owner: str = ""
+    admin: str = ""
+    tech: str = ""
+    zone: str = ""
+
+    def role_ids(self) -> dict[str, str]:
+        return {"owner": self.owner, "admin": self.admin, "tech": self.tech, "zone": self.zone}
 
 
 class Domain(ContaboModel):
+    """Registered domain (`GET /v1/domains`, `GET /v1/domains/{domain}`)."""
+
     domain: str = Field(alias="domainName", default="")
     status: str | None = None
+    tenant_id: str | None = Field(default=None, alias="tenantId")
+    customer_id: str | None = Field(default=None, alias="customerId")
+    nameservers: list[str] = Field(default_factory=list)
+    handles: DomainHandles | None = None
+    details: DomainDetails | None = Field(default=None, alias="domainDetails")
+    registration_date: str | None = Field(default=None, alias="registrationDate")
+    renewal_date: str | None = Field(default=None, alias="renewalDate")
+    termination_date: str | None = Field(default=None, alias="terminationDate")
+    cancel_date: str | None = Field(default=None, alias="cancelDate")
+    dnssec_keys: list[str] = Field(default_factory=list, alias="dnssecKeys")
+    transfer_out_confirmation: bool | None = Field(
+        default=None, alias="transferOutConfirmation"
+    )
 
 
 class Handle(ContaboModel):
@@ -91,6 +133,36 @@ class Handle(ContaboModel):
     first_name: str | None = None
     last_name: str | None = None
     email: str | None = None
+
+
+class Contact(ContaboModel):
+    """Registrant-style contact (namecheap-style fields).
+
+    Used for ``register()``/``set_contacts()`` input across backends:
+    Contabo resolves/creates handles from it, WHMCS maps it to
+    AddClient/AddContact params.
+    """
+
+    first_name: str = Field(alias="firstName", default="")
+    last_name: str = Field(alias="lastName", default="")
+    organization: str | None = Field(default=None, alias="organization")
+    address1: str = Field(alias="address1", default="")
+    address2: str | None = Field(default=None, alias="address2")
+    city: str = Field(alias="city", default="")
+    state_province: str = Field(default="", alias="stateProvince")
+    postal_code: str = Field(default="", alias="postalCode")
+    country: str = Field(alias="country", default="")
+    phone: str = Field(alias="phone", default="")
+    email: str = Field(alias="email", default="")
+
+
+class DomainContacts(ContaboModel):
+    """Contacts for the four domain roles."""
+
+    registrant: Contact = Field(default_factory=Contact)
+    tech: Contact = Field(default_factory=Contact)
+    admin: Contact = Field(default_factory=Contact)
+    aux_billing: Contact = Field(default_factory=Contact)
 
 
 class EmailForward(ContaboModel):

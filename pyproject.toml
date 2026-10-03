@@ -1,6 +1,6 @@
 [project]
 name = "contabo-python"
-version = "0.1.0"
+version = "0.3.0"
 description = "A friendly Python SDK for the Contabo API (DNS, Domains, Handles)"
 authors = [{name = "fikachu"}]
 readme = "README.md"
@@ -33,6 +33,9 @@ Repository = "https://api.contabo.com/"
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.7.0",
+]
+whmcs = [
+    "whmcspy>=0.3.0",
 ]
 
 [build-system]

@@ -35,6 +35,32 @@ Zones and records are Pydantic models: `zone.zone_name`,
 `record.id / record.content / record.ttl / record.prio`. Use `r.to_dto()`
 for a plain dict carrying both `id`/`recordId` and `content`/`data` keys.
 
+## Domains (namecheap-style)
+
+```python
+c.domains.check("example.com", "new-idea123.com")  # -> [DomainCheck]
+c.domains.list(sld="example")                       # account portfolio
+c.domains.get_info("example.com")                   # status, dates, NS, handles
+c.domains.get_contacts("example.com")               # handle IDs resolved
+c.domains.register("new.com", contact={...handles...}, nameservers=[...])
+```
+
+Method map (`namecheap.DomainsAPI` → Contabo): `check/list/get_info/get_contacts/register`
+are native (adapted); `renew/lock/unlock/set_contacts/get_tld_list` raise
+`NotSupportedError` with an alternative (no Contabo endpoint exists);
+`suggest/pending` are experimental (docs-sidebar only, unconfirmed paths).
+`cancel/get_auth_code/transfer-out` are Contabo-native extras. See
+`examples/domains.py`. Domain features require ≥1 other active product or
+checks fail with a clear 402/403 error.
+
+Same API over WHMCS (`pip install contabo-python[whmcs]`):
+
+```python
+from contabo import WhmcsDomains
+w = WhmcsDomains("https://billing.example.com", "identifier", "secret")
+w.check("example.com"); w.register("new.com", contact={...}, client_id=42)
+```
+
 ## Quirks (cf. namecheap `1799 = Automatic`)
 
 - No sandbox, no IP whitelist, no pricing/balance endpoints.

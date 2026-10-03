@@ -30,6 +30,19 @@ class ContaboAPIError(ContaboError):
     """Raised on non-2xx Contabo API responses."""
 
 
+class NotSupportedError(ContaboError):
+    """Raised when a backend has no endpoint for the requested operation."""
+
+    def __init__(self, message: str, alternative: str | None = None):
+        super().__init__(message, status_code=0, response_text="")
+        self.alternative = alternative
+
+    def __str__(self) -> str:
+        if self.alternative:
+            return f"{self.message} Alternative: {self.alternative}"
+        return self.message
+
+
 class ConfigurationError(ContaboError):
     """Raised when credentials/config are missing or invalid."""
 

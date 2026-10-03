@@ -113,3 +113,185 @@ def test_pagination_and_401_retry():
     c._access_token, c._token_expires_at = "tok", 9e9
     zones = c.dns.list_zones()
     assert zones[0].zone_name == "example.com" and calls["n"] == 2
+
+
+def _domains_client(handler):
+    import httpx
+
+    os.environ.update({"CONTABO_CLIENT_ID": "a", "CONTABO_CLIENT_SECRET": "b",
+                       "CONTABO_API_USER": "c", "CONTABO_API_PASSWORD": "d"})
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    c = Contabo(_http=http)
+    c._access_token, c._token_expires_at = "tok", 9e9
+    return c
+
+
+def test_domains_check_parses_availability():
+    import httpx
+    c = _domains_client(lambda req: httpx.Response(200, json={"data": [{"available": True}]}))
+    out = c.domains.check("free-domain-xyz123.com", "taken.com")
+    assert [r.available for r in out] == [True, True]
+    assert out[0].domain == "free-domain-xyz123.com"
+
+
+def test_domains_check_refused_is_clear():
+    import httpx
+    c = _domains_client(lambda req: httpx.Response(402, json={"message": "pay up"}))
+    try:
+        c.domains.check("example.com")
+        raise AssertionError("expected ContaboAPIError")
+    except Exception as e:
+        assert "at least" in str(e) and "one other active" in str(e)
+
+
+def test_domains_get_info_full_shape():
+    import httpx
+    payload = {"data": [{
+        "domainName": "example.com", "status": "active",
+        "nameservers": ["ns1.contabo.net"],
+        "handles": {"owner": "H1", "admin": "H1", "tech": "H2", "zone": "H2"},
+        "domainDetails": {"sld": "example", "tld": "com", "domainPuny": "example.com"},
+        "registrationDate": "2024-01-01", "renewalDate": "2025-01-01",
+    }]}
+    c = _domains_client(lambda req: httpx.Response(200, json=payload))
+    d = c.domains.get_info("example.com")
+    assert d.domain == "example.com" and d.status == "active"
+    assert d.nameservers == ["ns1.contabo.net"]
+    assert d.handles.owner == "H1" and d.details.fqdn == "example.com"
+
+
+def test_domains_get_contacts_resolves_handles():
+    import httpx
+    def handler(req):
+        path = req.url.path
+        if path.endswith("/domains/example.com"):
+            return httpx.Response(200, json={"data": [{
+                "domainName": "example.com",
+                "handles": {"owner": "H1", "admin": "", "tech": "", "zone": ""},
+            }]})
+        if path.endswith("/domains/handles/H1"):
+            return httpx.Response(200, json={"data": [{
+                "handleId": "H1", "first_name": "John", "last_name": "Doe",
+                "email": "john@example.com",
+            }]})
+        return httpx.Response(404, json={})
+    c = _domains_client(handler)
+    contacts = c.domains.get_contacts("example.com")
+    assert contacts.registrant.first_name == "John"
+    assert contacts.registrant.email == "john@example.com"
+    assert contacts.tech.first_name == ""
+
+
+def test_domains_unsupported_raise():
+    from contabo import NotSupportedError
+    c = _client_with_mock()
+    for fn in (lambda: c.domains.renew("example.com"),
+               lambda: c.domains.lock("example.com"),
+               lambda: c.domains.unlock("example.com"),
+               lambda: c.domains.set_contacts("example.com", {}),
+               lambda: c.domains.get_tld_list()):
+        try:
+            fn()
+            raise AssertionError("expected NotSupportedError")
+        except NotSupportedError as e:
+            assert e.alternative
+
+
+def test_domains_register_builds_payload():
+    import json
+
+    import httpx
+    seen = {}
+
+    def handler(req):
+        if req.url.path == "/v1/domains/handles" and req.method == "POST":
+            body = json.loads(req.content)
+            return httpx.Response(201, json={"data": [{"handleId": "HX", **body}]})
+        if req.url.path == "/v1/domains" and req.method == "POST":
+            seen.update(json.loads(req.content))
+            return httpx.Response(201, json={"data": [{"domainName": "new.com", "status": "pending"}]})
+        return httpx.Response(404, json={})
+    c = _domains_client(handler)
+    d = c.domains.register(
+        "new.com",
+        contact={"firstName": "J", "lastName": "D", "email": "j@d.com", "country": "US",
+                 "address1": "s", "city": "c", "phone": "+1", "stateProvince": "s", "postalCode": "1"},
+        nameservers=["ns1.contabo.net"],
+    )
+    assert d.domain == "new.com"
+    assert seen["handles"] == {"owner": "HX", "admin": "HX", "tech": "HX", "zone": "HX"}
+    assert seen["nameservers"] == [{"hostname": ["ns1.contabo.net"]}]
+
+
+def _whmcs_backend(monkeypatch, stub):
+    """Build WhmcsDomains with a stubbed whmcspy module (no extra needed)."""
+    import sys
+    import types
+    from unittest.mock import MagicMock
+
+    from contabo._api import whmcs as whmcs_mod
+
+    fake_client = MagicMock()
+    fake_client.call.side_effect = lambda action, **kw: stub(action, **kw)
+    for method in ("add_client", "add_order", "update_client_domain",
+                   "get_clients_domains", "get_tld_pricing"):
+        getattr(fake_client, method).side_effect = (
+            lambda *a, _m=method, **kw: stub(_m, *a, **kw)
+        )
+    fake_module = types.ModuleType("whmcspy")
+    fake_module.WHMCS = MagicMock(return_value=fake_client)
+
+    class _WhmcsError(Exception):
+        pass
+
+    fake_exc = types.ModuleType("whmcspy.exceptions")
+    fake_exc.Error = _WhmcsError
+    fake_exc.MissingPermission = _WhmcsError
+    monkeypatch.setitem(sys.modules, "whmcspy", fake_module)
+    monkeypatch.setitem(sys.modules, "whmcspy.exceptions", fake_exc)
+    return whmcs_mod.WhmcsDomains("https://billing.test", "id", "s"), fake_client
+
+
+def test_whmcs_check_parses_whois(monkeypatch):
+    def stub(action, **kw):
+        assert action == "DomainWhois"
+        return {"status": "available"} if kw["domain"] == "free.test" else {"status": "registered"}
+    backend, _ = _whmcs_backend(monkeypatch, stub)
+    out = backend.check("free.test", "taken.test")
+    assert [(r.domain, r.available) for r in out] == [("free.test", True), ("taken.test", False)]
+
+
+def test_whmcs_register_creates_client_then_orders(monkeypatch):
+    def stub(action, *a, **kw):
+        if action == "add_client":
+            return {"clientid": 42}
+        if action == "add_order":
+            assert kw["clientid"] == 42
+            assert kw["nameserver1"] == "ns1.test"
+            assert kw["eppcode"] == "auth123"
+            return {"orderid": 7}
+        raise AssertionError(action)
+    backend, _ = _whmcs_backend(monkeypatch, stub)
+    d = backend.register(
+        "new.test",
+        contact={"firstName": "J", "lastName": "D", "email": "j@d.com", "address1": "s",
+                 "city": "c", "stateProvince": "s", "postalCode": "1", "country": "US",
+                 "phone": "+1"},
+        nameservers=["ns1.test"],
+        auth_code="auth123",
+    )
+    assert d.domain == "new.test" and d.status == "pending"
+
+
+def test_whmcs_unsupported_raise(monkeypatch):
+    from contabo import NotSupportedError
+    backend, _ = _whmcs_backend(monkeypatch, lambda action, *a, **kw: {})
+    for fn in (lambda: backend.suggest("x.test"),
+               lambda: backend.pending(),
+               lambda: backend.lock("x.test"),
+               lambda: backend.get_tld_list()):
+        try:
+            fn()
+            raise AssertionError("expected NotSupportedError")
+        except NotSupportedError:
+            pass
