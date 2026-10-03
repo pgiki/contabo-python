@@ -38,7 +38,16 @@ _PENDING_PATH = "/domains/pending"
 
 
 def _seg(domain: str) -> str:
-    return quote(domain.strip().rstrip(".").lower(), safe=".-")
+    return quote(_ascii(domain), safe=".-")
+
+
+def _ascii(domain: str) -> str:
+    """Lowercase, trailing-dot-stripped, IDNA-encoded domain (stdlib only)."""
+    name = domain.strip().rstrip(".").lower()
+    try:
+        return name.encode("idna").decode("ascii")
+    except (UnicodeError, ValueError):
+        return name
 
 
 class DomainsAPI:
@@ -57,7 +66,7 @@ class DomainsAPI:
         """
         out: list[DomainCheck] = []
         for raw in domains:
-            name = raw.strip().rstrip(".").lower()
+            name = _ascii(raw)
             if not name:
                 continue
             try:
@@ -168,7 +177,7 @@ class DomainsAPI:
         ``whois_protection`` are accepted for namecheap parity but Contabo
         has no equivalent and they are ignored (warned, never silent).
         """
-        name = domain.strip().rstrip(".").lower()
+        name = _ascii(domain)
         if years != 1:
             logger.warning("Contabo has no registration-period option; ignoring years=%s", years)
         if not whois_protection:
@@ -236,7 +245,7 @@ class DomainsAPI:
     # -- experimental (unverified paths; probe live, degrade) --
     def suggest(self, domain: str, **params: Any) -> list[dict]:
         """Suggest domains (experimental: path unconfirmed against live API)."""
-        body = self._c._get(_SUGGEST_PATH, params={"domain": domain, **params})
+        body = self._c._get(_SUGGEST_PATH, params={"domain": _ascii(domain), **params})
         return list(body.get("data") or [])
 
     def pending(self, **params: Any) -> list[dict]:

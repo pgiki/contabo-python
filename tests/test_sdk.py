@@ -295,3 +295,15 @@ def test_whmcs_unsupported_raise(monkeypatch):
             raise AssertionError("expected NotSupportedError")
         except NotSupportedError:
             pass
+
+
+def test_whmcs_add_client_int_return(monkeypatch):
+    """Real whmcspy add_client returns a bare int, not a payload dict."""
+    def stub(action, *a, **kw):
+        if action == "GetClients":
+            return {"clients": {"client": []}}
+        if action == "add_client":
+            return 99
+        raise AssertionError(action)
+    backend, _ = _whmcs_backend(monkeypatch, stub)
+    assert backend.ensure_client({"email": "nobody@test"}) == 99

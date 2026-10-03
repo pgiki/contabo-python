@@ -152,10 +152,11 @@ class Contabo:
     def _paginated_list(self, path: str, extra: dict[str, Any] | None = None) -> list[dict]:
         rows: list[dict] = []
         page, size = 1, 100
+        # Caller filters must not hijack pagination cursors (infinite loop).
+        filt = {k: v for k, v in (extra or {}).items() if k not in ("page", "size")}
         while True:
             params: dict[str, Any] = {"page": page, "size": size}
-            if extra:
-                params.update(extra)
+            params.update(filt)
             body = self._get(path, params=params)
             chunk = list(body.get("data") or [])
             rows.extend(chunk)

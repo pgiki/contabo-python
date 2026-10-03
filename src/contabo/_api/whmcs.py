@@ -55,6 +55,13 @@ def _normalize_whois_status(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def _client_id(created: Any) -> int:
+    """whmcspy ``add_client`` returns a bare ``clientid`` int (not a payload)."""
+    if isinstance(created, dict):
+        return int(created.get("clientid", 0))
+    return int(created)
+
+
 def _contact_from_row(row: dict[str, Any]) -> Contact:
     return Contact.model_validate(
         {
@@ -219,6 +226,7 @@ class WhmcsDomains:
         name = domain.strip().rstrip(".").lower()
         data = contact.model_dump(by_alias=True) if isinstance(contact, Contact) else dict(contact)
         if client_id is None:
+            password = kwargs.pop("password", None) or data.get("phone", "")
             created = self._w.add_client(
                 data.get("firstName", ""),
                 data.get("lastName", ""),
@@ -229,9 +237,9 @@ class WhmcsDomains:
                 data.get("postalCode", ""),
                 data.get("country", ""),
                 data.get("phone", ""),
-                data.get("phone", ""),
+                password,
             )
-            client_id = int(created.get("clientid", 0))
+            client_id = _client_id(created)
         params: dict[str, Any] = {"regperiod": int(years)}
         for i, ns in enumerate(nameservers or [], start=1):
             params[f"nameserver{i}"] = ns
@@ -279,7 +287,9 @@ class WhmcsDomains:
 
     # -- client management (no namecheap equivalent; ported from fikashop) --
     @_translate_errors
-    def ensure_client(self, contact: Contact | dict[str, Any]) -> int:
+    def ensure_client(
+        self, contact: Contact | dict[str, Any], *, password: str | None = None
+    ) -> int:
         """Find client by email or create it; returns ``clientid``."""
         data = contact.model_dump(by_alias=True) if isinstance(contact, Contact) else dict(contact)
         email = (data.get("email") or "").strip().lower()
@@ -300,9 +310,9 @@ class WhmcsDomains:
             data.get("postalCode", ""),
             data.get("country", ""),
             data.get("phone", ""),
-            data.get("phone", ""),
+            password if password is not None else data.get("phone", ""),
         )
-        return int(created.get("clientid", 0))
+        return _client_id(created)
 
     @_translate_errors
     def ensure_contact(self, client_id: int, contact: Contact | dict[str, Any]) -> int:
