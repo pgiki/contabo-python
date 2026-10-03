@@ -29,24 +29,11 @@ c.dns.set("example.com", c.dns.builder()
 
 SDK never reads `.env` implicitly — use `Contabo.from_env_file(".env")`.
 
-## fikashop migration
+## Models
 
-```python
-# before
-from domains.services.dns.contabo_dns import ContaboDNS
-contabo = ContaboDNS.from_env()
-zone = contabo.get_or_create_zone(domain.fqdn)
-contabo.set_a_records(zone["zoneName"], domain.fqdn, ip)
-
-# after
-from contabo import Contabo
-contabo = Contabo()  # same CONTABO_* env vars
-zone = contabo.dns.get_or_create_zone(domain.fqdn)
-contabo.dns.set_a_records(zone.zone_name, domain.fqdn, ip)
-```
-
-`list_records()` now returns Pydantic `ZoneRecord` models — use `r.to_dto()`
-for the legacy `{id, recordId, content, data, ...}` dict shape.
+Zones and records are Pydantic models: `zone.zone_name`,
+`record.id / record.content / record.ttl / record.prio`. Use `r.to_dto()`
+for a plain dict carrying both `id`/`recordId` and `content`/`data` keys.
 
 ## Quirks (cf. namecheap `1799 = Automatic`)
 

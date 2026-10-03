@@ -26,9 +26,8 @@ class ContaboError(Exception):
         return base
 
 
-# Alias matching the previous integrated client's exception name.
 class ContaboAPIError(ContaboError):
-    """Raised on non-2xx Contabo API responses (legacy name)."""
+    """Raised on non-2xx Contabo API responses."""
 
 
 class ConfigurationError(ContaboError):
