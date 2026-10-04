@@ -60,6 +60,17 @@ def test_record_normalization():
     assert dto["type"] == "MX"
 
 
+def test_record_null_prio_ttl_coerced_to_defaults():
+    # The live API returns explicit nulls for inapplicable fields
+    # (e.g. TXT records carry ``prio: null``) — must not raise.
+    r = ZoneRecord.model_validate({"recordId": 12, "name": "example.com",
+                                   "type": "TXT", "data": "v=spf1 ~all",
+                                   "ttl": None, "prio": None})
+    dto = r.to_dto()
+    assert dto["ttl"] == 3600
+    assert dto["prio"] == 0
+
+
 def test_set_replaces_all_and_resolves_at():
     c = _client_with_mock()
     c._paginated_list.return_value = [

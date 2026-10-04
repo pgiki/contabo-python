@@ -45,6 +45,15 @@ class ZoneRecord(ContaboModel):
     def _empty_to_none(cls, v: Any) -> Any:
         return None if v in (None, "") else v
 
+    @field_validator("prio", "ttl", mode="before")
+    @classmethod
+    def _empty_to_default(cls, v: Any, info) -> Any:
+        # The API returns explicit nulls for inapplicable fields (e.g. TXT
+        # records carry ``prio: null``); coerce to the field defaults.
+        if v in (None, ""):
+            return 0 if info.field_name == "prio" else 3600
+        return v
+
     @classmethod
     def from_api(cls, raw: dict[str, Any]) -> ZoneRecord:
         return cls.model_validate(raw)
