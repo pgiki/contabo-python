@@ -71,6 +71,16 @@ def test_record_null_prio_ttl_coerced_to_defaults():
     assert dto["prio"] == 0
 
 
+def test_ptr_update_sends_ptr_field():
+    # The API rejects ``hostname`` with 400; the field name must be ``ptr``.
+    c = _client_with_mock()
+    c._request = MagicMock(return_value={"data": []})
+    c.ptr.update("203.0.113.10", "mail.example.com")
+    c._request.assert_called_once_with(
+        "PUT", "/dns/ptrs/203.0.113.10", json={"ptr": "mail.example.com"}
+    )
+
+
 def test_set_replaces_all_and_resolves_at():
     c = _client_with_mock()
     c._paginated_list.return_value = [

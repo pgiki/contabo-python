@@ -33,7 +33,9 @@ class PtrAPI:
         return PtrRecord.model_validate(rows[0] if rows else {"ipAddress": ip, "hostname": hostname})
 
     def update(self, ip: str, hostname: str) -> PtrRecord:
-        body = self._c._request("PUT", f"/dns/ptrs/{quote(ip, safe=':.')}", json={"hostname": hostname})
+        # NOTE: the API validates a ``ptr`` field (``hostname`` is rejected
+        # with 400 "Please enter a valid domain for PTR").
+        body = self._c._request("PUT", f"/dns/ptrs/{quote(ip, safe=':.')}", json={"ptr": hostname})
         rows = body.get("data") or []
         return PtrRecord.model_validate(rows[0] if rows else {"ipAddress": ip, "hostname": hostname})
 
