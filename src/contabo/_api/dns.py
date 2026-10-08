@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
+from ..errors import ContaboAPIError
 from ..models import Zone, ZoneRecord
 
 if TYPE_CHECKING:
@@ -33,10 +34,15 @@ class DnsBuilder:
         self._specs: list[dict[str, Any]] = []
 
     def _add(self, name: str, rtype: str, content: str, ttl: int | None = None, **kw: Any):
-        self._specs.append({
-            "name": name, "type": rtype.upper(), "content": content,
-            "ttl": int(ttl) if ttl is not None else self.default_ttl, **kw,
-        })
+        self._specs.append(
+            {
+                "name": name,
+                "type": rtype.upper(),
+                "content": content,
+                "ttl": int(ttl) if ttl is not None else self.default_ttl,
+                **kw,
+            }
+        )
         return self
 
     def a(self, name: str, ip: str, ttl: int | None = None):
@@ -83,8 +89,6 @@ class DnsAPI:
         z = str(domain).strip().rstrip(".")
         if not z:
             return None
-        from ..errors import ContaboAPIError
-
         try:
             body = self._c._get(f"/dns/zones/{_seg(z)}")
         except ContaboAPIError as exc:
@@ -117,12 +121,28 @@ class DnsAPI:
     def get(self, zone_name: str) -> list[ZoneRecord]:
         return self.list_records(zone_name)
 
-    def create_record(self, zone_name: str, name: str, record_type: str, content: str,
-                      ttl: int | None = None, *, prio: int = 0,
-                      port=None, weight=None, flag=None, tag: str | None = None) -> ZoneRecord:
+    def create_record(
+        self,
+        zone_name: str,
+        name: str,
+        record_type: str,
+        content: str,
+        ttl: int | None = None,
+        *,
+        prio: int = 0,
+        port=None,
+        weight=None,
+        flag=None,
+        tag: str | None = None,
+    ) -> ZoneRecord:
         ttl_use = int(ttl if ttl is not None else self._c.config.default_ttl)
-        payload: dict[str, Any] = {"name": name, "type": record_type.upper(),
-                                   "ttl": ttl_use, "prio": int(prio), "data": content}
+        payload: dict[str, Any] = {
+            "name": name,
+            "type": record_type.upper(),
+            "ttl": ttl_use,
+            "prio": int(prio),
+            "data": content,
+        }
         for k, v in (("port", port), ("weight", weight), ("flag", flag)):
             if v is not None and str(v) != "":
                 payload[k] = str(v)
@@ -130,14 +150,32 @@ class DnsAPI:
             payload["tag"] = tag
         data = self._c._post(f"/dns/zones/{_seg(zone_name)}/records", payload).get("data", [])
         if not data:
-            return ZoneRecord.model_validate({"recordId": 0, "name": name,
-                                              "type": record_type.upper(), "data": content,
-                                              "ttl": ttl_use, "prio": prio})
+            return ZoneRecord.model_validate(
+                {
+                    "recordId": 0,
+                    "name": name,
+                    "type": record_type.upper(),
+                    "data": content,
+                    "ttl": ttl_use,
+                    "prio": prio,
+                }
+            )
         return ZoneRecord.model_validate(data[0])
 
-    def update_record(self, zone_name: str, record_id: str | int, *, content=None,
-                      ttl=None, prio=None, record_type=None, port=None,
-                      weight=None, flag=None, tag=None) -> ZoneRecord:
+    def update_record(
+        self,
+        zone_name: str,
+        record_id: str | int,
+        *,
+        content=None,
+        ttl=None,
+        prio=None,
+        record_type=None,
+        port=None,
+        weight=None,
+        flag=None,
+        tag=None,
+    ) -> ZoneRecord:
         payload: dict[str, Any] = {}
         if content is not None:
             payload["data"] = content
@@ -162,8 +200,9 @@ class DnsAPI:
     def bulk_delete(self, zone_name: str, record_ids: list[int]) -> None:
         if not record_ids:
             return
-        self._c._request("DELETE", f"/dns/zones/{_seg(zone_name)}/records/bulk",
-                         json={"recordIds": [int(i) for i in record_ids]})
+        self._c._request(
+            "DELETE", f"/dns/zones/{_seg(zone_name)}/records/bulk", json={"recordIds": [int(i) for i in record_ids]}
+        )
 
     def delete_record(self, zone_name: str, record_id: str | int) -> None:
         self.bulk_delete(zone_name, [int(record_id)])
@@ -177,18 +216,27 @@ class DnsAPI:
     def delete_records_by_type(self, zone_name: str, record_type: str, name: str | None = None) -> int:
         target = record_type.upper()
         tname = name.rstrip(".") if name else None
-        ids = [r.id for r in self.list_records(zone_name)
-               if r.type.upper() == target and (tname is None or r.name.rstrip(".") == tname)]
+        ids = [
+            r.id
+            for r in self.list_records(zone_name)
+            if r.type.upper() == target and (tname is None or r.name.rstrip(".") == tname)
+        ]
         self.bulk_delete(zone_name, ids)
         return len(ids)
 
-    def set_a_records(self, zone_name: str, domain: str, ip: str, include_www: bool = True,
-                      include_wildcard: bool = False, ttl: int | None = None) -> list[ZoneRecord]:
+    def set_a_records(
+        self,
+        zone_name: str,
+        domain: str,
+        ip: str,
+        include_www: bool = True,
+        include_wildcard: bool = False,
+        ttl: int | None = None,
+    ) -> list[ZoneRecord]:
         domain = domain.rstrip(".")
         names = [domain] + (["www." + domain] if include_www else []) + (["*." + domain] if include_wildcard else [])
         targets = {n.rstrip(".") for n in names}
-        stale = [r.id for r in self.list_records(zone_name)
-                 if r.type.upper() == "A" and r.name.rstrip(".") in targets]
+        stale = [r.id for r in self.list_records(zone_name) if r.type.upper() == "A" and r.name.rstrip(".") in targets]
         self.bulk_delete(zone_name, stale)
         return [self.create_record(zone_name, n, "A", ip, ttl=ttl) for n in names]
 
@@ -207,10 +255,20 @@ class DnsAPI:
         created = []
         for s in builder.specs():
             host = self._hostname(s["name"], base)
-            created.append(self.create_record(zone_name, host, s["type"], s["content"],
-                                              ttl=s.get("ttl"), prio=s.get("prio", 0),
-                                              port=s.get("port"), weight=s.get("weight"),
-                                              flag=s.get("flag"), tag=s.get("tag")))
+            created.append(
+                self.create_record(
+                    zone_name,
+                    host,
+                    s["type"],
+                    s["content"],
+                    ttl=s.get("ttl"),
+                    prio=s.get("prio", 0),
+                    port=s.get("port"),
+                    weight=s.get("weight"),
+                    flag=s.get("flag"),
+                    tag=s.get("tag"),
+                )
+            )
         return created
 
     @staticmethod

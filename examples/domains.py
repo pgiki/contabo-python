@@ -1,4 +1,5 @@
 """Domain management — namecheap-style API on Contabo (and WHMCS)."""
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,7 +10,7 @@ c = Contabo()
 
 # Availability (one result per domain)
 for result in c.domains.check("example.com", "my-new-idea12345.com"):
-    print(result.domain, "available:" , result.available, result.reason or "")
+    print(result.domain, "available:", result.available, result.reason or "")
 
 # Portfolio + details
 for domain in c.domains.list():

@@ -1,4 +1,5 @@
 """Offline tests for contabo-python (no network)."""
+
 import os
 from unittest.mock import MagicMock
 
@@ -11,8 +12,12 @@ from contabo.models import ZoneRecord
 
 
 def _client_with_mock(**overrides):
-    env = {"CONTABO_CLIENT_ID": "id", "CONTABO_CLIENT_SECRET": "s",
-           "CONTABO_API_USER": "u@e.com", "CONTABO_API_PASSWORD": "p"}
+    env = {
+        "CONTABO_CLIENT_ID": "id",
+        "CONTABO_CLIENT_SECRET": "s",
+        "CONTABO_API_USER": "u@e.com",
+        "CONTABO_API_PASSWORD": "p",
+    }
     os.environ.update(env)
     c = Contabo()
     m = MagicMock()
@@ -32,8 +37,9 @@ def test_config_missing_raises():
         os.environ.pop(k, None)
     with pytest.raises(ConfigurationError):
         Contabo()
-    os.environ.update({"CONTABO_CLIENT_ID": "a", "CONTABO_CLIENT_SECRET": "b",
-                       "CONTABO_API_USER": "c", "CONTABO_API_PASSWORD": "d"})
+    os.environ.update(
+        {"CONTABO_CLIENT_ID": "a", "CONTABO_CLIENT_SECRET": "b", "CONTABO_API_USER": "c", "CONTABO_API_PASSWORD": "d"}
+    )
 
 
 def test_builder_specs():
@@ -52,8 +58,9 @@ def test_hostname_mapping():
 
 
 def test_record_normalization():
-    r = ZoneRecord.model_validate({"recordId": 11, "name": "example.com",
-                                   "type": "mx", "data": "mail.example.com", "ttl": 3600, "prio": 10})
+    r = ZoneRecord.model_validate(
+        {"recordId": 11, "name": "example.com", "type": "mx", "data": "mail.example.com", "ttl": 3600, "prio": 10}
+    )
     dto = r.to_dto()
     assert dto["id"] == 11 and dto["recordId"] == 11
     assert dto["content"] == "mail.example.com" and dto["data"] == "mail.example.com"
@@ -63,9 +70,9 @@ def test_record_normalization():
 def test_record_null_prio_ttl_coerced_to_defaults():
     # The live API returns explicit nulls for inapplicable fields
     # (e.g. TXT records carry ``prio: null``) — must not raise.
-    r = ZoneRecord.model_validate({"recordId": 12, "name": "example.com",
-                                   "type": "TXT", "data": "v=spf1 ~all",
-                                   "ttl": None, "prio": None})
+    r = ZoneRecord.model_validate(
+        {"recordId": 12, "name": "example.com", "type": "TXT", "data": "v=spf1 ~all", "ttl": None, "prio": None}
+    )
     dto = r.to_dto()
     assert dto["ttl"] == 3600
     assert dto["prio"] == 0
@@ -76,21 +83,22 @@ def test_ptr_update_sends_ptr_field():
     c = _client_with_mock()
     c._request = MagicMock(return_value={"data": []})
     c.ptr.update("203.0.113.10", "mail.example.com")
-    c._request.assert_called_once_with(
-        "PUT", "/dns/ptrs/203.0.113.10", json={"ptr": "mail.example.com"}
-    )
+    c._request.assert_called_once_with("PUT", "/dns/ptrs/203.0.113.10", json={"ptr": "mail.example.com"})
 
 
 def test_set_replaces_all_and_resolves_at():
     c = _client_with_mock()
     c._paginated_list.return_value = [
-        {"recordId": 1, "name": "example.com", "type": "A", "data": "9.9.9.9", "ttl": 3600, "prio": 0}]
+        {"recordId": 1, "name": "example.com", "type": "A", "data": "9.9.9.9", "ttl": 3600, "prio": 0}
+    ]
     created = []
 
     def fake_create(zone, name, rtype, content, **kw):
         created.append((zone, name, rtype, content))
-        return ZoneRecord.model_validate({"recordId": len(created), "name": name,
-                                          "type": rtype, "data": content, "ttl": 3600, "prio": 0})
+        return ZoneRecord.model_validate(
+            {"recordId": len(created), "name": name, "type": rtype, "data": content, "ttl": 3600, "prio": 0}
+        )
+
     c.dns.create_record = fake_create
     deleted = []
     c.dns.bulk_delete = lambda z, ids: deleted.extend(ids)
@@ -111,7 +119,8 @@ def test_set_a_records_targets_only_a():
     seen = {}
     c.dns.bulk_delete = lambda z, ids: seen.update(ids=ids)
     c.dns.create_record = lambda z, n, t, co, **kw: ZoneRecord.model_validate(
-        {"recordId": 9, "name": n, "type": t, "data": co})
+        {"recordId": 9, "name": n, "type": t, "data": co}
+    )
     out = c.dns.set_a_records("example.com", "example.com", "1.2.3.4")
     assert seen["ids"] == [1]
     assert [r.name for r in out] == ["example.com", "www.example.com"]
@@ -119,6 +128,7 @@ def test_set_a_records_targets_only_a():
 
 def test_pagination_and_401_retry():
     import httpx
+
     calls = {"n": 0}
 
     def handler(req: httpx.Request):
@@ -126,8 +136,10 @@ def test_pagination_and_401_retry():
         if req.url.path == "/v1/dns/zones" and calls["n"] == 1:
             return httpx.Response(401, json={"m": "expired"})
         return httpx.Response(200, json={"data": [{"zoneName": "example.com"}], "_pagination": {"totalPages": 1}})
-    os.environ.update({"CONTABO_CLIENT_ID": "a", "CONTABO_CLIENT_SECRET": "b",
-                       "CONTABO_API_USER": "c", "CONTABO_API_PASSWORD": "d"})
+
+    os.environ.update(
+        {"CONTABO_CLIENT_ID": "a", "CONTABO_CLIENT_SECRET": "b", "CONTABO_API_USER": "c", "CONTABO_API_PASSWORD": "d"}
+    )
     http = httpx.Client(transport=httpx.MockTransport(handler))
     c = Contabo(_http=http)
     c.authenticate = lambda: setattr(c, "_access_token", "tok") or setattr(c, "_token_expires_at", 9e9) or "tok"
@@ -139,8 +151,9 @@ def test_pagination_and_401_retry():
 def _domains_client(handler):
     import httpx
 
-    os.environ.update({"CONTABO_CLIENT_ID": "a", "CONTABO_CLIENT_SECRET": "b",
-                       "CONTABO_API_USER": "c", "CONTABO_API_PASSWORD": "d"})
+    os.environ.update(
+        {"CONTABO_CLIENT_ID": "a", "CONTABO_CLIENT_SECRET": "b", "CONTABO_API_USER": "c", "CONTABO_API_PASSWORD": "d"}
+    )
     http = httpx.Client(transport=httpx.MockTransport(handler))
     c = Contabo(_http=http)
     c._access_token, c._token_expires_at = "tok", 9e9
@@ -149,6 +162,7 @@ def _domains_client(handler):
 
 def test_domains_check_parses_availability():
     import httpx
+
     c = _domains_client(lambda req: httpx.Response(200, json={"data": [{"available": True}]}))
     out = c.domains.check("free-domain-xyz123.com", "taken.com")
     assert [r.available for r in out] == [True, True]
@@ -157,6 +171,7 @@ def test_domains_check_parses_availability():
 
 def test_domains_check_refused_is_clear():
     import httpx
+
     c = _domains_client(lambda req: httpx.Response(402, json={"message": "pay up"}))
     try:
         c.domains.check("example.com")
@@ -167,13 +182,20 @@ def test_domains_check_refused_is_clear():
 
 def test_domains_get_info_full_shape():
     import httpx
-    payload = {"data": [{
-        "domainName": "example.com", "status": "active",
-        "nameservers": ["ns1.contabo.net"],
-        "handles": {"owner": "H1", "admin": "H1", "tech": "H2", "zone": "H2"},
-        "domainDetails": {"sld": "example", "tld": "com", "domainPuny": "example.com"},
-        "registrationDate": "2024-01-01", "renewalDate": "2025-01-01",
-    }]}
+
+    payload = {
+        "data": [
+            {
+                "domainName": "example.com",
+                "status": "active",
+                "nameservers": ["ns1.contabo.net"],
+                "handles": {"owner": "H1", "admin": "H1", "tech": "H2", "zone": "H2"},
+                "domainDetails": {"sld": "example", "tld": "com", "domainPuny": "example.com"},
+                "registrationDate": "2024-01-01",
+                "renewalDate": "2025-01-01",
+            }
+        ]
+    }
     c = _domains_client(lambda req: httpx.Response(200, json=payload))
     d = c.domains.get_info("example.com")
     assert d.domain == "example.com" and d.status == "active"
@@ -183,19 +205,37 @@ def test_domains_get_info_full_shape():
 
 def test_domains_get_contacts_resolves_handles():
     import httpx
+
     def handler(req):
         path = req.url.path
         if path.endswith("/domains/example.com"):
-            return httpx.Response(200, json={"data": [{
-                "domainName": "example.com",
-                "handles": {"owner": "H1", "admin": "", "tech": "", "zone": ""},
-            }]})
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "domainName": "example.com",
+                            "handles": {"owner": "H1", "admin": "", "tech": "", "zone": ""},
+                        }
+                    ]
+                },
+            )
         if path.endswith("/domains/handles/H1"):
-            return httpx.Response(200, json={"data": [{
-                "handleId": "H1", "first_name": "John", "last_name": "Doe",
-                "email": "john@example.com",
-            }]})
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "handleId": "H1",
+                            "first_name": "John",
+                            "last_name": "Doe",
+                            "email": "john@example.com",
+                        }
+                    ]
+                },
+            )
         return httpx.Response(404, json={})
+
     c = _domains_client(handler)
     contacts = c.domains.get_contacts("example.com")
     assert contacts.registrant.first_name == "John"
@@ -205,12 +245,15 @@ def test_domains_get_contacts_resolves_handles():
 
 def test_domains_unsupported_raise():
     from contabo import NotSupportedError
+
     c = _client_with_mock()
-    for fn in (lambda: c.domains.renew("example.com"),
-               lambda: c.domains.lock("example.com"),
-               lambda: c.domains.unlock("example.com"),
-               lambda: c.domains.set_contacts("example.com", {}),
-               lambda: c.domains.get_tld_list()):
+    for fn in (
+        lambda: c.domains.renew("example.com"),
+        lambda: c.domains.lock("example.com"),
+        lambda: c.domains.unlock("example.com"),
+        lambda: c.domains.set_contacts("example.com", {}),
+        lambda: c.domains.get_tld_list(),
+    ):
         try:
             fn()
             raise AssertionError("expected NotSupportedError")
@@ -222,6 +265,7 @@ def test_domains_register_builds_payload():
     import json
 
     import httpx
+
     seen = {}
 
     def handler(req):
@@ -232,11 +276,21 @@ def test_domains_register_builds_payload():
             seen.update(json.loads(req.content))
             return httpx.Response(201, json={"data": [{"domainName": "new.com", "status": "pending"}]})
         return httpx.Response(404, json={})
+
     c = _domains_client(handler)
     d = c.domains.register(
         "new.com",
-        contact={"firstName": "J", "lastName": "D", "email": "j@d.com", "country": "US",
-                 "address1": "s", "city": "c", "phone": "+1", "stateProvince": "s", "postalCode": "1"},
+        contact={
+            "firstName": "J",
+            "lastName": "D",
+            "email": "j@d.com",
+            "country": "US",
+            "address1": "s",
+            "city": "c",
+            "phone": "+1",
+            "stateProvince": "s",
+            "postalCode": "1",
+        },
         nameservers=["ns1.contabo.net"],
     )
     assert d.domain == "new.com"
@@ -254,11 +308,8 @@ def _whmcs_backend(monkeypatch, stub):
 
     fake_client = MagicMock()
     fake_client.call.side_effect = lambda action, **kw: stub(action, **kw)
-    for method in ("add_client", "add_order", "update_client_domain",
-                   "get_clients_domains", "get_tld_pricing"):
-        getattr(fake_client, method).side_effect = (
-            lambda *a, _m=method, **kw: stub(_m, *a, **kw)
-        )
+    for method in ("add_client", "add_order", "update_client_domain", "get_clients_domains", "get_tld_pricing"):
+        getattr(fake_client, method).side_effect = lambda *a, _m=method, **kw: stub(_m, *a, **kw)
     fake_module = types.ModuleType("whmcspy")
     fake_module.WHMCS = MagicMock(return_value=fake_client)
 
@@ -277,6 +328,7 @@ def test_whmcs_check_parses_whois(monkeypatch):
     def stub(action, **kw):
         assert action == "DomainWhois"
         return {"status": "available"} if kw["domain"] == "free.test" else {"status": "registered"}
+
     backend, _ = _whmcs_backend(monkeypatch, stub)
     out = backend.check("free.test", "taken.test")
     assert [(r.domain, r.available) for r in out] == [("free.test", True), ("taken.test", False)]
@@ -292,12 +344,21 @@ def test_whmcs_register_creates_client_then_orders(monkeypatch):
             assert kw["eppcode"] == "auth123"
             return {"orderid": 7}
         raise AssertionError(action)
+
     backend, _ = _whmcs_backend(monkeypatch, stub)
     d = backend.register(
         "new.test",
-        contact={"firstName": "J", "lastName": "D", "email": "j@d.com", "address1": "s",
-                 "city": "c", "stateProvince": "s", "postalCode": "1", "country": "US",
-                 "phone": "+1"},
+        contact={
+            "firstName": "J",
+            "lastName": "D",
+            "email": "j@d.com",
+            "address1": "s",
+            "city": "c",
+            "stateProvince": "s",
+            "postalCode": "1",
+            "country": "US",
+            "phone": "+1",
+        },
         nameservers=["ns1.test"],
         auth_code="auth123",
     )
@@ -306,11 +367,14 @@ def test_whmcs_register_creates_client_then_orders(monkeypatch):
 
 def test_whmcs_unsupported_raise(monkeypatch):
     from contabo import NotSupportedError
+
     backend, _ = _whmcs_backend(monkeypatch, lambda action, *a, **kw: {})
-    for fn in (lambda: backend.suggest("x.test"),
-               lambda: backend.pending(),
-               lambda: backend.lock("x.test"),
-               lambda: backend.get_tld_list()):
+    for fn in (
+        lambda: backend.suggest("x.test"),
+        lambda: backend.pending(),
+        lambda: backend.lock("x.test"),
+        lambda: backend.get_tld_list(),
+    ):
         try:
             fn()
             raise AssertionError("expected NotSupportedError")
@@ -320,11 +384,13 @@ def test_whmcs_unsupported_raise(monkeypatch):
 
 def test_whmcs_add_client_int_return(monkeypatch):
     """Real whmcspy add_client returns a bare int, not a payload dict."""
+
     def stub(action, *a, **kw):
         if action == "GetClients":
             return {"clients": {"client": []}}
         if action == "add_client":
             return 99
         raise AssertionError(action)
+
     backend, _ = _whmcs_backend(monkeypatch, stub)
     assert backend.ensure_client({"email": "nobody@test"}) == 99

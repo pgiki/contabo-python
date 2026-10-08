@@ -74,8 +74,7 @@ class DomainsAPI:
             except ContaboAPIError as e:
                 if e.status_code in (402, 403):
                     raise ContaboAPIError(
-                        f"Domain check refused for {name}: account needs at least "
-                        "one other active Contabo product.",
+                        f"Domain check refused for {name}: account needs at least one other active Contabo product.",
                         e.status_code,
                         e.response_text,
                     ) from e
@@ -193,10 +192,7 @@ class DomainsAPI:
             },
             # Nameserver entries follow the cntb shape: one entry per
             # hostname; dicts pass through verbatim for ipV4/ipV6 glue.
-            "nameservers": [
-                ns if isinstance(ns, dict) else {"hostname": [ns]}
-                for ns in (nameservers or [])
-            ],
+            "nameservers": [ns if isinstance(ns, dict) else {"hostname": [ns]} for ns in (nameservers or [])],
         }
         if auth_code:
             payload["authCode"] = auth_code

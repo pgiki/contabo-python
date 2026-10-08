@@ -5,22 +5,19 @@ from __future__ import annotations
 import time
 import uuid
 from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import Any, Self
 
 import httpx
+from dotenv import load_dotenv
 
+from ._api.audits import AuditsAPI
+from ._api.dns import DnsAPI
+from ._api.domains import DomainsAPI
+from ._api.handles import HandlesAPI
+from ._api.ptr import PtrAPI
 from .config import Config
 from .errors import ConfigurationError, ContaboAPIError
 from .logging import logger, set_log_level
-
-if TYPE_CHECKING:
-    from typing import Self
-
-    from ._api.audits import AuditsAPI
-    from ._api.dns import DnsAPI
-    from ._api.domains import DomainsAPI
-    from ._api.handles import HandlesAPI
-    from ._api.ptr import PtrAPI
 
 
 class Contabo:
@@ -36,17 +33,29 @@ class Contabo:
     TOKEN_URL = "https://auth.contabo.com/auth/realms/contabo/protocol/openid-connect/token"  # noqa: S105
     API_BASE = "https://api.contabo.com/v1"
 
-    def __init__(self, *, client_id: str | None = None, client_secret: str | None = None,
-                 api_user: str | None = None, api_password: str | None = None,
-                 default_ttl: int | None = None, token_refresh_buffer: int | None = None,
-                 timeout: float | None = None, log_level: str | None = None,
-                 _http: httpx.Client | None = None):
+    def __init__(
+        self,
+        *,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        api_user: str | None = None,
+        api_password: str | None = None,
+        default_ttl: int | None = None,
+        token_refresh_buffer: int | None = None,
+        timeout: float | None = None,
+        log_level: str | None = None,
+        _http: httpx.Client | None = None,
+    ):
         try:
             self.config = Config.from_env(
-                client_id=client_id, client_secret=client_secret, api_user=api_user,
-                api_password=api_password, default_ttl=default_ttl or 3600,
+                client_id=client_id,
+                client_secret=client_secret,
+                api_user=api_user,
+                api_password=api_password,
+                default_ttl=default_ttl or 3600,
                 token_refresh_buffer=token_refresh_buffer or 60,
-                timeout=timeout or 30.0, log_level=(log_level or "INFO"),
+                timeout=timeout or 30.0,
+                log_level=(log_level or "INFO"),
             )
             set_log_level(self.config.log_level)
         except Exception as e:
@@ -61,51 +70,49 @@ class Contabo:
 
     @classmethod
     def from_env_file(cls, path: str = ".env") -> Self:
-        from dotenv import load_dotenv
-
         load_dotenv(path)
         return cls()
 
     # -- sub-APIs (same shape as Namecheap: domains/dns/users...) --
     @cached_property
     def dns(self) -> DnsAPI:
-        from ._api.dns import DnsAPI
-
         return DnsAPI(self)
 
     @cached_property
     def domains(self) -> DomainsAPI:
-        from ._api.domains import DomainsAPI
-
         return DomainsAPI(self)
 
     @cached_property
     def handles(self) -> HandlesAPI:
-        from ._api.handles import HandlesAPI
-
         return HandlesAPI(self)
 
     @cached_property
     def ptr(self) -> PtrAPI:
-        from ._api.ptr import PtrAPI
-
         return PtrAPI(self)
 
     @cached_property
     def audits(self) -> AuditsAPI:
-        from ._api.audits import AuditsAPI
-
         return AuditsAPI(self)
 
     # -- auth --
     def authenticate(self) -> str:
-        resp = self._http.post(self.TOKEN_URL, data={
-            "client_id": self.config.client_id, "client_secret": self.config.client_secret,
-            "username": self.config.api_user, "password": self.config.api_password,
-            "grant_type": "password"})
+        resp = self._http.post(
+            self.TOKEN_URL,
+            data={
+                "client_id": self.config.client_id,
+                "client_secret": self.config.client_secret,
+                "username": self.config.api_user,
+                "password": self.config.api_password,
+                "grant_type": "password",
+            },
+        )
         if resp.status_code != 200:
-            raise ContaboAPIError("Authentication failed", resp.status_code, resp.text,
-                                  help="Check CONTABO_CLIENT_ID/SECRET/API_USER/API_PASSWORD in my.contabo.com → API.")
+            raise ContaboAPIError(
+                "Authentication failed",
+                resp.status_code,
+                resp.text,
+                help="Check CONTABO_CLIENT_ID/SECRET/API_USER/API_PASSWORD in my.contabo.com → API.",
+            )
         payload = resp.json()
         self._access_token = payload["access_token"]
         self._token_expires_at = time.time() + int(payload.get("expires_in", 3600))
@@ -122,17 +129,16 @@ class Contabo:
         return {"Authorization": f"Bearer {self._token()}", "x-request-id": str(uuid.uuid4())}
 
     def _request(self, method: str, path: str, *, params=None, json=None) -> dict:
-        resp = self._http.request(method, f"{self.API_BASE}{path}",
-                                  headers=self._headers(), params=params, json=json)
+        resp = self._http.request(method, f"{self.API_BASE}{path}", headers=self._headers(), params=params, json=json)
         # Single retry on expired token
         if resp.status_code == 401:
             logger.debug("401 — refreshing token and retrying once")
             self.authenticate()
-            resp = self._http.request(method, f"{self.API_BASE}{path}",
-                                      headers=self._headers(), params=params, json=json)
+            resp = self._http.request(
+                method, f"{self.API_BASE}{path}", headers=self._headers(), params=params, json=json
+            )
         if not 200 <= resp.status_code < 300:
-            raise ContaboAPIError(f"API request failed: {method} {path}",
-                                  resp.status_code, resp.text)
+            raise ContaboAPIError(f"API request failed: {method} {path}", resp.status_code, resp.text)
         if not resp.content:
             return {}
         return resp.json()

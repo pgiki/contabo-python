@@ -130,9 +130,7 @@ class Domain(ContaboModel):
     termination_date: str | None = Field(default=None, alias="terminationDate")
     cancel_date: str | None = Field(default=None, alias="cancelDate")
     dnssec_keys: list[str] = Field(default_factory=list, alias="dnssecKeys")
-    transfer_out_confirmation: bool | None = Field(
-        default=None, alias="transferOutConfirmation"
-    )
+    transfer_out_confirmation: bool | None = Field(default=None, alias="transferOutConfirmation")
 
 
 class Handle(ContaboModel):

@@ -56,6 +56,7 @@ __all__ = [
 def __getattr__(name: str):
     """Lazy backends needing optional extras (keeps the base install light)."""
     if name == "WhmcsDomains":
-        from ._api.whmcs import WhmcsDomains
+        from ._api.whmcs import WhmcsDomains  # noqa: PLC0415  # optional whmcs extra; PEP 562 lazy export
+
         return WhmcsDomains
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

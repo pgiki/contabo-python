@@ -47,15 +47,16 @@ packages = ["src/contabo"]
 
 [tool.ruff]
 target-version = "py312"
+line-length = 120
 src = ["src"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "N", "S", "C4", "RET", "SIM"]
-extend-ignore = ["E501"]
-ignore = ["S101"]
+select = ["E", "F", "W", "PLC0415", "I", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
 "examples/*.py" = ["E402"]
+"tests/*.py" = ["PLC0415"]
+"tests/**/*.py" = ["PLC0415"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

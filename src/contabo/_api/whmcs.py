@@ -12,7 +12,10 @@ production (``DomainWhois`` status normalization).
 from __future__ import annotations
 
 import logging
+from functools import wraps
 from typing import Any
+
+from whmcspy import exceptions as whmcs_exceptions
 
 from ..errors import ContaboAPIError, NotSupportedError
 from ..models import Contact, Domain, DomainCheck, DomainContacts
@@ -21,12 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 def _translate_errors(func):
-    import functools
-
-    @functools.wraps(func)
+    @wraps(func)
     def wrapper(*args: Any, **kwargs: Any):
-        from whmcspy import exceptions as whmcs_exceptions
-
         try:
             return func(*args, **kwargs)
         except (whmcs_exceptions.Error, whmcs_exceptions.MissingPermission) as e:
@@ -88,11 +87,9 @@ class WhmcsDomains:
 
     def __init__(self, api_url: str, identifier: str, secret: str, *, timeout: float = 30.0):
         try:
-            from whmcspy import WHMCS
+            from whmcspy import WHMCS  # noqa: PLC0415  # optional extra guard with friendly message
         except ImportError as e:
-            raise ImportError(
-                "WhmcsDomains needs the whmcs extra: pip install contabo-python[whmcs]"
-            ) from e
+            raise ImportError("WhmcsDomains needs the whmcs extra: pip install contabo-python[whmcs]") from e
         base = (api_url or "").rstrip("/")
         if base and not base.rsplit("/", 1)[-1].endswith("api.php"):
             base = f"{base}/includes/api.php"
@@ -176,9 +173,7 @@ class WhmcsDomains:
         return DomainContacts(registrant=registrant, tech=tech, admin=tech, aux_billing=Contact())
 
     @_translate_errors
-    def set_contacts(
-        self, domain: str, contact: Contact | dict[str, Any], *, client_id: int | None = None
-    ) -> bool:
+    def set_contacts(self, domain: str, contact: Contact | dict[str, Any], *, client_id: int | None = None) -> bool:
         """Update the WHMCS client record + first contact (``client_id`` required)."""
         if client_id is None:
             raise ValueError("set_contacts() requires client_id on the WHMCS backend.")
@@ -287,9 +282,7 @@ class WhmcsDomains:
 
     # -- client management (no namecheap equivalent; ported from fikashop) --
     @_translate_errors
-    def ensure_client(
-        self, contact: Contact | dict[str, Any], *, password: str | None = None
-    ) -> int:
+    def ensure_client(self, contact: Contact | dict[str, Any], *, password: str | None = None) -> int:
         """Find client by email or create it; returns ``clientid``."""
         data = contact.model_dump(by_alias=True) if isinstance(contact, Contact) else dict(contact)
         email = (data.get("email") or "").strip().lower()
@@ -358,13 +351,9 @@ class WhmcsDomains:
     @_translate_errors
     def update_nameservers(self, domain: str, nameservers: list[str], **params: Any) -> dict[str, Any]:
         """``DomainUpdateNameservers`` for ``domain`` (plus optional ``domainid``)."""
-        body: dict[str, Any] = {
-            f"ns{i}": ns for i, ns in enumerate(nameservers, start=1)
-        }
+        body: dict[str, Any] = {f"ns{i}": ns for i, ns in enumerate(nameservers, start=1)}
         body.update(params)
-        payload = self._w.call(
-            "DomainUpdateNameservers", domain=domain.strip().rstrip(".").lower(), **body
-        )
+        payload = self._w.call("DomainUpdateNameservers", domain=domain.strip().rstrip(".").lower(), **body)
         return payload if isinstance(payload, dict) else {}
 
     @_translate_errors
