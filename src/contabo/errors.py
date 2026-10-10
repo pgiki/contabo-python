@@ -48,3 +48,10 @@ class ConfigurationError(ContaboError):
 
     def __init__(self, message: str):
         super().__init__(message, status_code=0, response_text="")
+
+
+class PricingError(ContaboError):
+    """Raised when storefront price fetching/parsing fails."""
+
+    def __init__(self, message: str):
+        super().__init__(message, status_code=0, response_text="")

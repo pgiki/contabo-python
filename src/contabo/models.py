@@ -177,3 +177,73 @@ class EmailForward(ContaboModel):
 
     mailbox: str
     forward_to: str = Field(alias="forwardTo", default="")
+
+
+class IpConfig(ContaboModel):
+    """IP configuration of a compute instance."""
+
+    v4: str | None = Field(default=None, alias="ipV4")
+    v6: str | None = Field(default=None, alias="ipV6")
+    # API nests as ipConfig: {v4: {ip, ...}, v6: {...}} in some versions;
+    # accept both plain strings and nested dicts.
+    @classmethod
+    def coerce(cls, raw: Any) -> IpConfig | None:
+        if not raw or not isinstance(raw, dict):
+            return None
+        v4 = raw.get("v4") or raw.get("ipV4")
+        v6 = raw.get("v6") or raw.get("ipV6")
+        if isinstance(v4, dict):
+            v4 = v4.get("ip")
+        if isinstance(v6, dict):
+            v6 = v6.get("ip")
+        return cls.model_validate({"ipV4": v4, "ipV6": v6})
+
+
+class ComputeInstance(ContaboModel):
+    """Cloud VPS / VDS instance (GET /v1/compute/instances)."""
+
+    instance_id: str | int = Field(alias="instanceId", default="")
+    display_name: str = Field(alias="displayName", default="")
+    name: str = ""
+    status: str = ""
+    product_id: str = Field(alias="productId", default="")
+    product_name: str = Field(alias="productName", default="")
+    cpu_cores: int = Field(alias="cpuCores", default=0)
+    ram_mb: int = Field(alias="ramMb", default=0)
+    disk_mb: int = Field(alias="diskMb", default=0)
+    region: str = ""
+    image_id: str | None = Field(default=None, alias="imageId")
+    ip_config: IpConfig | None = Field(default=None, alias="ipConfig")
+    add_ons: list[Any] = Field(default_factory=list, alias="addOns")
+    cancel_date: str | None = Field(default=None, alias="cancelDate")
+    tenant_id: str | None = Field(default=None, alias="tenantId")
+    customer_id: str | None = Field(default=None, alias="customerId")
+
+    @property
+    def ip_v4(self) -> str:
+        if self.ip_config and self.ip_config.v4:
+            return str(self.ip_config.v4)
+        return ""
+
+    @property
+    def ip_v6(self) -> str:
+        if self.ip_config and self.ip_config.v6:
+            return str(self.ip_config.v6)
+        return ""
+
+
+class Image(ContaboModel):
+    """OS / custom image (GET /v1/compute/images)."""
+
+    image_id: str = Field(alias="imageId", default="")
+    name: str = ""
+    description: str | None = None
+
+
+class Snapshot(ContaboModel):
+    """Instance snapshot (GET /v1/compute/snapshots)."""
+
+    snapshot_id: str = Field(alias="snapshotId", default="")
+    instance_id: str | None = Field(default=None, alias="instanceId")
+    name: str = ""
+    status: str | None = None

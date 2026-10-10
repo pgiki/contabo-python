@@ -11,6 +11,7 @@ import httpx
 from dotenv import load_dotenv
 
 from ._api.audits import AuditsAPI
+from ._api.compute import ComputeAPI
 from ._api.dns import DnsAPI
 from ._api.domains import DomainsAPI
 from ._api.handles import HandlesAPI
@@ -94,6 +95,10 @@ class Contabo:
     def audits(self) -> AuditsAPI:
         return AuditsAPI(self)
 
+    @cached_property
+    def compute(self) -> ComputeAPI:
+        return ComputeAPI(self)
+
     # -- auth --
     def authenticate(self) -> str:
         resp = self._http.post(
@@ -151,6 +156,9 @@ class Contabo:
 
     def _patch(self, path: str, payload: dict) -> dict:
         return self._request("PATCH", path, json=payload)
+
+    def _put(self, path: str, payload: dict) -> dict:
+        return self._request("PUT", path, json=payload)
 
     def _delete(self, path: str) -> None:
         self._request("DELETE", path)

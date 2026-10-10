@@ -21,6 +21,9 @@ class Config(BaseModel):
     token_refresh_buffer: int = Field(default=60, description="Refresh seconds before expiry")
     timeout: float = Field(default=30.0, description="HTTP timeout seconds")
     log_level: str = Field(default="INFO")
+    default_region: str = Field(default="EU", description="Default Contabo region for compute")
+    default_period: int = Field(default=1, description="Default billing period months (1/3/6/12)")
+    default_image_id: str = Field(default="", description="Default OS image UUID for compute")
 
     @field_validator("client_id", "client_secret", "api_user", "api_password")
     @classmethod
@@ -50,4 +53,7 @@ class Config(BaseModel):
             token_refresh_buffer=int(get("token_refresh_buffer", "CONTABO_TOKEN_BUFFER", 60)),
             timeout=float(get("timeout", "CONTABO_TIMEOUT", 30.0)),
             log_level=str(get("log_level", "CONTABO_LOG_LEVEL", "INFO")).upper(),
+            default_region=str(get("default_region", "CONTABO_DEFAULT_REGION", "EU")),
+            default_period=int(get("default_period", "CONTABO_DEFAULT_PERIOD", 1)),
+            default_image_id=str(get("default_image_id", "CONTABO_DEFAULT_IMAGE_ID", "")),
         )

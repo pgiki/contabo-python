@@ -16,8 +16,10 @@ from .errors import (
     ContaboAPIError,
     ContaboError,
     NotSupportedError,
+    PricingError,
 )
 from .models import (
+    ComputeInstance,
     Contact,
     Domain,
     DomainCheck,
@@ -26,19 +28,29 @@ from .models import (
     DomainHandles,
     EmailForward,
     Handle,
+    Image,
+    IpConfig,
     PtrRecord,
+    Snapshot,
     Zone,
     ZoneRecord,
 )
+from .pricing import (
+    ContaboStorefrontPricing,
+    PricingConfig,
+    VpsPrice,
+)
 
-__version__ = "0.3.0"
+__version__ = "0.5.0"
 __all__ = [
+    "ComputeInstance",
     "ConfigurationError",
     "Contabo",
     "ContaboAPIError",
     "ContaboError",
     "Config",
     "Contact",
+    "ContaboStorefrontPricing",
     "Domain",
     "DomainCheck",
     "DomainContacts",
@@ -46,8 +58,14 @@ __all__ = [
     "DomainHandles",
     "EmailForward",
     "Handle",
+    "Image",
+    "IpConfig",
     "NotSupportedError",
+    "PricingConfig",
+    "PricingError",
     "PtrRecord",
+    "Snapshot",
+    "VpsPrice",
     "Zone",
     "ZoneRecord",
 ]
