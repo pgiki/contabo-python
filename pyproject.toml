@@ -1,6 +1,6 @@
 [project]
 name = "contabo-python"
-version = "0.5.0"
+version = "0.5.1"
 description = "A friendly Python SDK for the Contabo API (DNS, Domains, Handles, Compute/VPS)"
 authors = [{name = "fikachu"}]
 readme = "README.md"
