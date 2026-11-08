@@ -203,6 +203,31 @@ def test_domains_get_info_full_shape():
     assert d.handles.owner == "H1" and d.details.fqdn == "example.com"
 
 
+def test_domains_get_info_tolerates_null_optional_fields():
+    import httpx
+
+    payload = {
+        "data": [
+            {
+                "domainName": "example.com",
+                "status": None,
+                "nameservers": None,
+                "handles": {"owner": None, "admin": None, "tech": None, "zone": None},
+                "domainDetails": {"sld": None, "tld": None, "domainPuny": None},
+                "dnssecKeys": None,
+            }
+        ]
+    }
+    c = _domains_client(lambda req: httpx.Response(200, json=payload))
+    d = c.domains.get_info("example.com")
+    assert d.domain == "example.com"
+    assert d.status is None
+    assert d.nameservers == []
+    assert d.dnssec_keys == []
+    assert d.handles.role_ids() == {"owner": "", "admin": "", "tech": "", "zone": ""}
+    assert d.details.fqdn == ""
+
+
 def test_domains_get_contacts_resolves_handles():
     import httpx
 
@@ -274,7 +299,19 @@ def test_domains_register_builds_payload():
             return httpx.Response(201, json={"data": [{"handleId": "HX", **body}]})
         if req.url.path == "/v1/domains" and req.method == "POST":
             seen.update(json.loads(req.content))
-            return httpx.Response(201, json={"data": [{"domainName": "new.com", "status": "pending"}]})
+            return httpx.Response(
+                201,
+                json={
+                    "data": [
+                        {
+                            "domainName": "new.com",
+                            "status": "pending",
+                            "nameservers": None,
+                            "dnssecKeys": None,
+                        }
+                    ]
+                },
+            )
         return httpx.Response(404, json={})
 
     c = _domains_client(handler)
@@ -294,6 +331,7 @@ def test_domains_register_builds_payload():
         nameservers=["ns1.contabo.net"],
     )
     assert d.domain == "new.com"
+    assert d.nameservers == [] and d.dnssec_keys == []
     assert seen["handles"] == {"owner": "HX", "admin": "HX", "tech": "HX", "zone": "HX"}
     assert seen["nameservers"] == [{"hostname": ["ns1.contabo.net"]}]
 

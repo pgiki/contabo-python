@@ -96,6 +96,11 @@ class DomainDetails(ContaboModel):
     tld: str = Field(alias="tld", default="")
     domain_puny: str = Field(alias="domainPuny", default="")
 
+    @field_validator("sld", "tld", "domain_puny", mode="before")
+    @classmethod
+    def _nullable_text(cls, value: Any) -> Any:
+        return "" if value is None else value
+
     @property
     def fqdn(self) -> str:
         if self.sld and self.tld:
@@ -110,6 +115,11 @@ class DomainHandles(ContaboModel):
     admin: str = ""
     tech: str = ""
     zone: str = ""
+
+    @field_validator("owner", "admin", "tech", "zone", mode="before")
+    @classmethod
+    def _nullable_handle(cls, value: Any) -> Any:
+        return "" if value is None else value
 
     def role_ids(self) -> dict[str, str]:
         return {"owner": self.owner, "admin": self.admin, "tech": self.tech, "zone": self.zone}
@@ -131,6 +141,18 @@ class Domain(ContaboModel):
     cancel_date: str | None = Field(default=None, alias="cancelDate")
     dnssec_keys: list[str] = Field(default_factory=list, alias="dnssecKeys")
     transfer_out_confirmation: bool | None = Field(default=None, alias="transferOutConfirmation")
+
+    @field_validator("domain", mode="before")
+    @classmethod
+    def _nullable_domain(cls, value: Any) -> Any:
+        # An empty identity is safer than a parse exception: reconciliation
+        # will verify availability before it permits another registration.
+        return "" if value is None else value
+
+    @field_validator("nameservers", "dnssec_keys", mode="before")
+    @classmethod
+    def _nullable_lists(cls, value: Any) -> Any:
+        return [] if value is None else value
 
 
 class Handle(ContaboModel):
